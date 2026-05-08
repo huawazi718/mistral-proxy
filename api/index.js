@@ -7,24 +7,20 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 打印所有请求头用于调试
-  console.log('=== 请求头 ===');
-  Object.entries(req.headers).forEach(([k, v]) => console.log(`${k}: ${v}`));
+  // 从 req.url 提取原始路径（rewrite 前的路径通过 x-vercel-rewrite 传递）
+  const originalPath = req.headers['x-vercel-rewrite'] || req.url || '/';
+  // 去掉 query string
+  const pathWithoutQuery = originalPath.split('?')[0];
+  const targetUrl = `https://api.mistral.ai${pathWithoutQuery}`;
 
-  // 透传所有 header（排除 host 和 content-length）
+  // 透传 header（排除 host 和 content-length）
   const headers = Object.fromEntries(
     Object.entries(req.headers).filter(
-      ([k]) => !['host', 'content-length'].includes(k.toLowerCase())
+      ([k]) => !['host', 'content-length', 'x-vercel-rewrite'].includes(k.toLowerCase())
     )
   );
 
-  // 构建目标 URL
-  const path = req.query.path || [];
-  const targetUrl = `https://api.mistral.ai/${Array.isArray(path) ? path.join('/') : path}`;
-
-  console.log('=== 转发 URL ===');
-  console.log('targetUrl:', targetUrl);
-  console.log('Authorization:', headers['authorization']);
+  console.log('targetUrl:', targetUrl, 'Authorization:', headers['authorization'] ? '有' : '无');
 
   try {
     const response = await fetch(targetUrl, {
