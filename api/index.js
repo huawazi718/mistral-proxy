@@ -19,30 +19,24 @@ export default async function handler(req, res) {
     )
   );
 
-  console.log('---REQUEST---');
-  console.log('targetUrl:', targetUrl, 'Authorization:', headers['authorization'] ? '有' : '无');
-  if (req.body) {
-    const { messages, ...rest } = req.body;
-    console.log('body params:', JSON.stringify(rest, null, 2));
-  }
-
-  // DEBUG: 如果 path 包含 debug，返回请求体而不是转发
-  if (originalPath.includes('debug')) {
-    return res.status(200).json({
-      targetUrl,
-      method: req.method,
-      body: req.body,
-      headers: Object.fromEntries(
-        Object.entries(headers).filter(([k]) => !['authorization'].includes(k.toLowerCase()))
-      )
-    });
+  // 清理请求体：移除 Mistral 不支持的参数
+  let body = req.body;
+  if (body && typeof body === 'object') {
+    // 移除 QClaw 自动添加但 Mistral 不接受的参数
+    const forbiddenKeys = ['reasoning_effort', 'thinking', 'thinking_budget'];
+    for (const key of forbiddenKeys) {
+      if (key in body) {
+        console.log(`[STRIP] removed "${key}": ${JSON.stringify(body[key])} from model ${body.model}`);
+        delete body[key];
+      }
+    }
   }
 
   try {
     const response = await fetch(targetUrl, {
       method: req.method,
       headers,
-      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body),
+      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(body),
     });
 
     const contentType = response.headers.get('content-type') || '';
