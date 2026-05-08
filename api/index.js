@@ -7,16 +7,15 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // 从 req.url 提取原始路径（rewrite 前的路径通过 x-vercel-rewrite 传递）
-  const originalPath = req.headers['x-vercel-rewrite'] || req.url || '/';
-  // 去掉 query string
-  const pathWithoutQuery = originalPath.split('?')[0];
-  const targetUrl = `https://api.mistral.ai${pathWithoutQuery}`;
+  // req.url 格式: /api?path=/v1/chat/completions
+  const url = new URL(req.url, `https://${req.headers.host || 'localhost'}`);
+  const originalPath = url.searchParams.get('path') || '/';
+  const targetUrl = `https://api.mistral.ai${originalPath}`;
 
-  // 透传 header（排除 host 和 content-length）
+  // 透传 header
   const headers = Object.fromEntries(
     Object.entries(req.headers).filter(
-      ([k]) => !['host', 'content-length', 'x-vercel-rewrite'].includes(k.toLowerCase())
+      ([k]) => !['host', 'content-length'].includes(k.toLowerCase())
     )
   );
 
