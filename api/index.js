@@ -26,6 +26,18 @@ export default async function handler(req, res) {
     console.log('body params:', JSON.stringify(rest, null, 2));
   }
 
+  // DEBUG: 如果 path 包含 debug，返回请求体而不是转发
+  if (originalPath.includes('debug')) {
+    return res.status(200).json({
+      targetUrl,
+      method: req.method,
+      body: req.body,
+      headers: Object.fromEntries(
+        Object.entries(headers).filter(([k]) => !['authorization'].includes(k.toLowerCase()))
+      )
+    });
+  }
+
   try {
     const response = await fetch(targetUrl, {
       method: req.method,
