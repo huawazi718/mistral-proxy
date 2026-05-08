@@ -30,9 +30,13 @@ export default async function handler(req, res) {
         delete body[key];
       }
     }
-    // 记录清理后的完整请求体（不含 messages 内容）
-    const { messages, ...rest } = body;
-    console.log('[CLEANED BODY]', JSON.stringify(rest, null, 2));
+    // OpenAI 用 max_completion_tokens，Mistral 只接受 max_tokens
+    if ('max_completion_tokens' in body) {
+      if (!('max_tokens' in body)) {
+        body.max_tokens = body.max_completion_tokens;
+      }
+      delete body.max_completion_tokens;
+    }
   }
 
   try {
