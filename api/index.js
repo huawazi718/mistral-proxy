@@ -55,6 +55,21 @@ export default async function handler(req, res) {
 
     const contentType = response.headers.get('content-type') || '';
 
+    // 透传 Mistral 的限额相关响应头
+    const rateLimitHeaders = [
+      'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset',
+      'ratelimit-limit', 'ratelimit-remaining', 'ratelimit-reset',
+      'retry-after', 'x-request-id', 'x-mistral-*'
+    ];
+    for (const [key, value] of response.headers.entries()) {
+      const lk = key.toLowerCase();
+      if (lk.startsWith('x-ratelimit') || lk.startsWith('ratelimit') ||
+          lk === 'retry-after' || lk.startsWith('x-mistral') ||
+          lk === 'x-request-id') {
+        res.setHeader(key, value);
+      }
+    }
+
     if (contentType.includes('text/event-stream')) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
