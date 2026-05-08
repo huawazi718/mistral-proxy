@@ -7,6 +7,10 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  // 打印所有请求头用于调试
+  console.log('=== 请求头 ===');
+  Object.entries(req.headers).forEach(([k, v]) => console.log(`${k}: ${v}`));
+
   // 透传所有 header（排除 host 和 content-length）
   const headers = Object.fromEntries(
     Object.entries(req.headers).filter(
@@ -18,10 +22,9 @@ export default async function handler(req, res) {
   const path = req.query.path || [];
   const targetUrl = `https://api.mistral.ai/${Array.isArray(path) ? path.join('/') : path}`;
 
-  // 打印调试信息
-  console.log('Request URL:', targetUrl);
-  console.log('Request Method:', req.method);
-  console.log('Request Headers:', JSON.stringify(headers, null, 2));
+  console.log('=== 转发 URL ===');
+  console.log('targetUrl:', targetUrl);
+  console.log('Authorization:', headers['authorization']);
 
   try {
     const response = await fetch(targetUrl, {
@@ -49,6 +52,7 @@ export default async function handler(req, res) {
     return res.status(response.status).json(data);
 
   } catch (error) {
+    console.error('Proxy error:', error);
     return res.status(500).json({ error: 'Proxy failed', message: error.message });
   }
 }
