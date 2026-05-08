@@ -30,6 +30,9 @@ export default async function handler(req, res) {
         delete body[key];
       }
     }
+    // 记录清理后的完整请求体（不含 messages 内容）
+    const { messages, ...rest } = body;
+    console.log('[CLEANED BODY]', JSON.stringify(rest, null, 2));
   }
 
   try {
