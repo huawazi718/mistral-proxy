@@ -19,23 +19,25 @@ export default async function handler(req, res) {
     )
   );
 
-  // 清理请求体：移除 Mistral 不支持的参数
+  // 清理请求体：白名单模式，只保留 Mistral 接受的参数
   let body = req.body;
   if (body && typeof body === 'object') {
-    // 移除 QClaw 自动添加但 Mistral 不接受的参数
-    const forbiddenKeys = ['reasoning_effort', 'thinking', 'thinking_budget'];
-    for (const key of forbiddenKeys) {
-      if (key in body) {
+    const allowedKeys = new Set([
+      'model', 'messages', 'temperature', 'top_p', 'max_tokens',
+      'stream', 'stream_options', 'stop', 'random_seed',
+      'tools', 'tool_choice', 'response_format', 'n',
+      'presence_penalty', 'frequency_penalty'
+    ]);
+    // max_completion_tokens → max_tokens 转换
+    if ('max_completion_tokens' in body && !('max_tokens' in body)) {
+      body.max_tokens = body.max_completion_tokens;
+    }
+    // 删除所有不在白名单中的 key
+    for (const key of Object.keys(body)) {
+      if (!allowedKeys.has(key)) {
         console.log(`[STRIP] removed "${key}": ${JSON.stringify(body[key])} from model ${body.model}`);
         delete body[key];
       }
-    }
-    // OpenAI 用 max_completion_tokens，Mistral 只接受 max_tokens
-    if ('max_completion_tokens' in body) {
-      if (!('max_tokens' in body)) {
-        body.max_tokens = body.max_completion_tokens;
-      }
-      delete body.max_completion_tokens;
     }
   }
 
