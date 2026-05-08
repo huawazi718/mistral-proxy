@@ -18,6 +18,11 @@ export default async function handler(req, res) {
   const path = req.query.path || [];
   const targetUrl = `https://api.mistral.ai/${Array.isArray(path) ? path.join('/') : path}`;
 
+  // 打印调试信息
+  console.log('Request URL:', targetUrl);
+  console.log('Request Method:', req.method);
+  console.log('Request Headers:', JSON.stringify(headers, null, 2));
+
   try {
     const response = await fetch(targetUrl, {
       method: req.method,
