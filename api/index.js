@@ -19,12 +19,13 @@ export default async function handler(req, res) {
     )
   );
 
+  let body = req.body;
+
   // 记录原始请求体的所有 key
   const originalKeys = body && typeof body === 'object' ? Object.keys(body) : [];
   const { messages: _msgs, ...originalParams } = body && typeof body === 'object' ? body : {};
 
   // 清理请求体：白名单模式，只保留 Mistral 接受的参数
-  let body = req.body;
   if (body && typeof body === 'object') {
     const allowedKeys = new Set([
       'model', 'messages', 'temperature', 'top_p', 'max_tokens',
