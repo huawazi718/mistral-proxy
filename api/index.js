@@ -58,6 +58,11 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
+    // 如果 Mistral 返回错误，附加我们发送的请求体便于调试
+    if (response.status >= 400) {
+      const { messages, ...sentParams } = body || {};
+      data._debug_sent_params = sentParams;
+    }
     return res.status(response.status).json(data);
 
   } catch (error) {
