@@ -19,7 +19,12 @@ export default async function handler(req, res) {
     )
   );
 
+  console.log('---REQUEST---');
   console.log('targetUrl:', targetUrl, 'Authorization:', headers['authorization'] ? '有' : '无');
+  if (req.body) {
+    const { messages, ...rest } = req.body;
+    console.log('body params:', JSON.stringify(rest, null, 2));
+  }
 
   try {
     const response = await fetch(targetUrl, {
