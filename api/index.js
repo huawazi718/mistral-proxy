@@ -1,6 +1,6 @@
 /**
  * Unified API Proxy - Mistral + Gemini
- * v2.0.0 - 根据模型名自动路由
+ * v2.1.0 - 修复 stream 模式下 URL 拼接 bug
  */
 
 const MISTRAL_API_BASE = "https://api.mistral.ai";
@@ -9,6 +9,7 @@ const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
 // Gemini 模型列表（用于路由判断）
 const GEMINI_MODELS = new Set([
   "gemini-2.0-flash",
+  "gemini-2.0-flash-exp",
   "gemini-2.0-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.5-pro",
@@ -23,7 +24,6 @@ function isGeminiModel(model) {
   if (!model) return false;
   const lower = model.toLowerCase();
   if (GEMINI_MODELS.has(lower)) return true;
-  // 匹配 models/gemini-xxx 或带版本后缀的模型
   return /^models\/gemini/.test(lower) || /^gemini-[\w.-]+$/.test(lower);
 }
 
@@ -32,7 +32,6 @@ function isGeminiModel(model) {
 function handleMistral(req, res, originalPath, body) {
   const targetUrl = `${MISTRAL_API_BASE}${originalPath}`;
 
-  // 清理请求体：白名单模式
   if (body && typeof body === "object") {
     const allowedKeys = new Set([
       "model", "messages", "temperature", "top_p", "max_tokens",
@@ -40,7 +39,6 @@ function handleMistral(req, res, originalPath, body) {
       "tools", "tool_choice", "response_format", "n",
       "presence_penalty", "frequency_penalty"
     ]);
-    // max_completion_tokens → max_tokens 转换
     if ("max_completion_tokens" in body && !("max_tokens" in body)) {
       body.max_tokens = body.max_completion_tokens;
     }
@@ -65,7 +63,6 @@ function handleMistral(req, res, originalPath, body) {
     body: ["GET", "HEAD"].includes(req.method) ? undefined : JSON.stringify(body),
     duplex: "half",
   }).then(response => {
-    // 透传限额头
     response.headers.forEach((value, key) => {
       const lk = key.toLowerCase();
       if (lk.startsWith("x-ratelimit") || lk.startsWith("ratelimit") ||
@@ -113,7 +110,6 @@ function handleGemini(req, res, body) {
   try {
     const { model, messages, stream = false, temperature = 0.7, max_tokens = 2048 } = body;
 
-    // 转换为 Gemini 格式
     const contents = messages.map(msg => ({
       role: msg.role === "assistant" ? "model" : "user",
       parts: [{ text: msg.content }],
@@ -127,13 +123,14 @@ function handleGemini(req, res, body) {
       },
     };
 
-    // 从模型名提取 Gemini 模型 ID（去掉 models/ 前缀）
     const geminiModel = model.replace(/^models\//, "");
+    // [FIX v2.1] stream 模式下直接拼接 key，避免二次 ? 拼接错误
+    const keyParam = `?key=${apiKey}`;
     const endpoint = stream
-      ? `/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse`
-      : `/v1beta/models/${geminiModel}:generateContent`;
+      ? `/v1beta/models/${geminiModel}:streamGenerateContent${keyParam}&alt=sse`
+      : `/v1beta/models/${geminiModel}:generateContent${keyParam}`;
 
-    const targetUrl = `${GEMINI_API_BASE}${endpoint}?key=${apiKey}`;
+    const targetUrl = `${GEMINI_API_BASE}${endpoint}`;
 
     console.log(`[GEMINI] ${req.method} ${geminiModel} stream=${stream}`);
 
@@ -237,20 +234,15 @@ function handleGeminiStream(response, res, model) {
 }
 
 function getApiKey(req) {
-  // 优先从 Authorization Bearer 获取
   const auth = req.headers["authorization"];
   if (auth?.startsWith("Bearer ")) return auth.substring(7);
-
-  // 其次从 body.api_key 获取
   if (req.body?.api_key) return req.body.api_key;
-
   return null;
 }
 
 // ============ 主处理器 ============
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-goog-api-key");
@@ -262,11 +254,10 @@ export default async function handler(req, res) {
   const url = new URL(req.url, `https://${req.headers.host || "localhost"}`);
   const path = url.searchParams.get("path") || "/";
 
-  // 健康检查
   if (path === "/health") {
     return res.status(200).json({
       status: "ok",
-      service: "Unified Proxy v2.0.0",
+      service: "Unified Proxy v2.1.0",
       models: {
         mistral: ["mistral-large", "mistral-medium", "mistral-small", "codestral"],
         gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.1-flash-lite"],
@@ -274,7 +265,6 @@ export default async function handler(req, res) {
     });
   }
 
-  // ========== /v1/chat/completions 路由 ==========
   if (path === "/v1/chat/completions") {
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
@@ -290,11 +280,9 @@ export default async function handler(req, res) {
     }
   }
 
-  // ========== 其他 /v1/ 路径 → Mistral（默认） ==========
   if (path.startsWith("/v1/") && path !== "/v1/chat/completions") {
     return handleMistral(req, res, path, req.body);
   }
 
-  // 其他路径
   res.status(404).json({ error: "Not found", path });
 };
