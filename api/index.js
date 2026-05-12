@@ -1,10 +1,11 @@
 /**
- * Unified API Proxy - Mistral + Gemini
- * v2.1.0 - 修复 stream 模式下 URL 拼接 bug
+ * Unified API Proxy - Mistral + Gemini + Nvidia
+ * v3.0.0 - 新增 Nvidia API 支持
  */
 
 const MISTRAL_API_BASE = "https://api.mistral.ai";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
+const NVIDIA_API_BASE = "https://integrate.api.nvidia.com";
 
 // Gemini 模型列表（用于路由判断）
 const GEMINI_MODELS = new Set([
@@ -25,6 +26,59 @@ function isGeminiModel(model) {
   const lower = model.toLowerCase();
   if (GEMINI_MODELS.has(lower)) return true;
   return /^models\/gemini/.test(lower) || /^gemini-[\w.-]+$/.test(lower);
+}
+
+// Nvidia 模型列表（用于路由判断）
+const NVIDIA_MODELS = new Set([
+  "minimaxai/minimax-m2.5",
+  "minimaxai/minimax-m2.7",
+]);
+
+function isNvidiaModel(model) {
+  if (!model) return false;
+  if (NVIDIA_MODELS.has(model)) return true;
+  // 匹配 common Nvidia model patterns
+  return /^(nvidia|minimaxai|meta|mistralai|google|microsoft)\//.test(model);
+}
+
+// ============ Nvidia 代理 ============
+
+function handleNvidia(req, res, originalPath, body) {
+  const nvidiaKey = process.env.NVIDIA_API_KEY;
+  const targetUrl = `${NVIDIA_API_BASE}${originalPath}`;
+
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${nvidiaKey}`,
+  };
+
+  console.log(`[NVIDIA] ${req.method} ${body?.model} stream=${body?.stream}`);
+
+  fetch(targetUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    duplex: "half",
+  }).then(response => {
+    const contentType = response.headers.get("content-type") || "";
+
+    if (contentType.includes("text/event-stream")) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      response.body.pipe(res);
+      return;
+    }
+
+    response.json().then(data => {
+      res.status(response.status).json(data);
+    }).catch(() => {
+      response.text().then(text => res.status(response.status).send(text));
+    });
+  }).catch(error => {
+    console.error("[NVIDIA ERROR]", error);
+    res.status(502).json({ error: "Nvidia proxy failed", message: error.message });
+  });
 }
 
 // ============ Mistral 代理 ============
@@ -257,10 +311,11 @@ export default async function handler(req, res) {
   if (path === "/health") {
     return res.status(200).json({
       status: "ok",
-      service: "Unified Proxy v2.1.0",
+      service: "Unified Proxy v3.0.0",
       models: {
         mistral: ["mistral-large", "mistral-medium", "mistral-small", "codestral"],
         gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.1-flash-lite"],
+        nvidia: ["minimaxai/minimax-m2.5", "minimaxai/minimax-m2.7"],
       },
     });
   }
@@ -275,6 +330,8 @@ export default async function handler(req, res) {
 
     if (isGeminiModel(model)) {
       return handleGemini(req, res, body);
+    } else if (isNvidiaModel(model)) {
+      return handleNvidia(req, res, path, body);
     } else {
       return handleMistral(req, res, path, body);
     }
