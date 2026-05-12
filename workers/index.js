@@ -1,7 +1,7 @@
 /**
  * Unified API Proxy for Cloudflare Workers
  * Supports: Mistral + Gemini + Nvidia
- * v1.0.0
+ * v1.1.0
  */
 
 const MISTRAL_API_BASE = "https://api.mistral.ai";
@@ -29,9 +29,10 @@ function isGeminiModel(model) {
   return /^models\/gemini/.test(lower) || /^gemini-[\w.-]+$/.test(lower);
 }
 
-function isNvidiaModel(model) {
+function isMistralModel(model) {
   if (!model) return false;
-  return /^(nvidia|minimaxai|meta|mistralai|google|microsoft|z-ai)\//.test(model);
+  const lower = model.toLowerCase();
+  return lower.startsWith("mistral") || lower.startsWith("codestral") || lower.startsWith("pixtral");
 }
 
 // ============ Nvidia 代理 ============
@@ -332,10 +333,11 @@ export default {
       
       if (isGeminiModel(model)) {
         return handleGemini(request, body);
-      } else if (isNvidiaModel(model)) {
-        return handleNvidia(request, body, path);
-      } else {
+      } else if (isMistralModel(model)) {
         return handleMistral(request, body, path);
+      } else {
+        // 兜底：非 Gemini 非 Mistral 的模型全走 Nvidia
+        return handleNvidia(request, body, path);
       }
     }
     
