@@ -38,7 +38,7 @@ function isNvidiaModel(model) {
   if (!model) return false;
   if (NVIDIA_MODELS.has(model)) return true;
   // 匹配 common Nvidia model patterns
-  return /^(nvidia|minimaxai|meta|mistralai|google|microsoft)\//.test(model);
+  return /^(nvidia|minimaxai|meta|mistralai|google|microsoft|z-ai)\//.test(model);
 }
 
 // ============ Nvidia 代理 ============
