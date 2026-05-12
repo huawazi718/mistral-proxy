@@ -44,13 +44,15 @@ function isNvidiaModel(model) {
 // ============ Nvidia 代理 ============
 
 function handleNvidia(req, res, originalPath, body) {
-  const nvidiaKey = process.env.NVIDIA_API_KEY;
   const targetUrl = `${NVIDIA_API_BASE}${originalPath}`;
 
-  const headers = {
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${nvidiaKey}`,
-  };
+  // 从请求中透传 Authorization header
+  const headers = {};
+  Object.entries(req.headers).forEach(([k, v]) => {
+    if (!["host", "content-length", "content-encoding"].includes(k.toLowerCase())) {
+      headers[k] = v;
+    }
+  });
 
   console.log(`[NVIDIA] ${req.method} ${body?.model} stream=${body?.stream}`);
 
